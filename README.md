@@ -25,34 +25,6 @@ that render through a unified pipeline.
 > [Reference](https://vsofttechnologies.github.io/VSoft.AnsiConsole/reference/markup-syntax)
 
 
-
-<!-- omit in toc -->
-## Contents
-
-- [Features](#features)
-- [Dependencies](#dependencies)
-- [Installation](#installation)
-- [Quick start](#quick-start)
-- [Showcase](#showcase)
-  - [Markup & colour](#markup--colour)
-  - [Tables](#tables)
-  - [Trees](#trees)
-  - [Panels & rules](#panels--rules)
-  - [Progress](#progress)
-  - [Status spinner](#status-spinner)
-  - [Prompts](#prompts)
-  - [Hierarchical selection](#hierarchical-selection)
-  - [Calendar](#calendar)
-  - [Bar & breakdown charts](#bar--breakdown-charts)
-  - [Canvas](#canvas)
-  - [FIGlet text](#figlet-text)
-  - [Pretty JSON](#pretty-json)
-  - [Exception widget](#exception-widget)
-  - [Recorder + HTML export](#recorder--html-export)
-- [Compatibility](#compatibility)
-- [Standing on the shoulders of giants](#standing-on-the-shoulders-of-giants)
-- [License](#license)
-
 ## Features
 
 - **24-bit / 256 / 16 colour** with automatic downsampling per terminal capability
