@@ -3,7 +3,7 @@ metadata:
   id: VSoft.AnsiConsole
   version: 0.1.1
   description: Advanced console library
-  authors: [ Vincent Parrett ]
+  authors: [Vincent Parrett]
   projectUrl: https://github.com/VSoftTechnologies/VSoft.AnsiConsole
   repositoryUrl: https://github.com/VSoftTechnologies/VSoft.AnsiConsole
   repositoryCommit: #HASH#
@@ -13,6 +13,7 @@ metadata:
     - console
     - terminal
     - ansi
+  readme: README.md
 
 variables:
   packageSource: "RAD Studio $compilernoprefix$"
@@ -20,10 +21,10 @@ variables:
 targetPlatforms:
   - compiler from: delphixe3
     compiler to: delphi10.4
-    platforms: [ win32, win64 ]
+    platforms: [win32, win64]
   - compiler from: delphi11
     compiler to: delphi13
-    platforms: [ win32, win64 ]
+    platforms: [win32, win64]
     variables:
       packageSource: "RAD Studio $compilernoprefix$.0"
 
@@ -39,4 +40,4 @@ templates:
       - src: ./Packages/$packageSource$/*.dproj
     build:
       - project: ./Packages/$packageSource$/VSoft.AnsiConsoleR.dproj
-        platforms: [ win32, win64 ]
+        platforms: [win32, win64]
