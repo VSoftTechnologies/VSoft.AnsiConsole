@@ -91,6 +91,9 @@ type
     FClearOnFinish           : Boolean;
     FRenderedLineCount       : Integer;
     procedure DrawPromptLine(const console : IAnsiConsole);
+    procedure RedrawInput(const console : IAnsiConsole; const value : string; const caret : Integer; const shrunk : Boolean);
+    function  PrevWordStart(const value : string; const caret : Integer) : Integer;
+    function  NextWordStart(const value : string; const caret : Integer) : Integer;
     function  IsValidChoice(const value : string) : Boolean;
   public
     constructor Create;
@@ -162,6 +165,18 @@ begin
   if s = '' then Exit;
   SetLength(segs, 1);
   segs[0] := TAnsiSegment.Text(s, style);
+  console.Write(segs);
+end;
+
+{ Emit a raw control sequence (cursor move / erase) through the normal write
+  path so it stays serialised with the rest of the output. }
+procedure EmitControl(const console : IAnsiConsole; const s : string);
+var
+  segs : TAnsiSegments;
+begin
+  if s = '' then Exit;
+  SetLength(segs, 1);
+  segs[0] := TAnsiSegment.ControlCode(s);
   console.Write(segs);
 end;
 
@@ -333,9 +348,66 @@ begin
   EmitPlain(console, FPromptSuffix);
 end;
 
+// Repaint the prompt and current input in place and park the cursor at caret.
+// CR (no erase-line) overwrites cells rather than blanking them, which avoids
+// flicker; on a shrink a single trailing space wipes the vacated cell.
+procedure TTextPrompt.RedrawInput(const console : IAnsiConsole; const value : string; const caret : Integer; const shrunk : Boolean);
+var
+  shown : string;
+  back  : Integer;
+begin
+  EmitControl(console, #13);
+  DrawPromptLine(console);
+  if FSecret then
+    shown := StringOfChar(FMask, Length(value))
+  else
+    shown := value;
+  EmitPlain(console, shown);
+  back := Length(shown) - caret;
+  if shrunk then
+  begin
+    EmitPlain(console, ' ');
+    Inc(back);
+  end;
+  if back > 0 then
+    EmitControl(console, ESC + '[' + IntToStr(back) + 'D');
+end;
+
+// Caret position at the start of the word to the left (skips spaces, then the
+// word). caret is the number of characters before the cursor; value is 1-based.
+function TTextPrompt.PrevWordStart(const value : string; const caret : Integer) : Integer;
+var
+  i : Integer;
+begin
+  i := caret;
+  while (i > 0) and (value[i] = ' ') do
+    Dec(i);
+  while (i > 0) and (value[i] <> ' ') do
+    Dec(i);
+  result := i;
+end;
+
+// Caret position at the start of the next word to the right (skips the rest of
+// the current word, then spaces).
+function TTextPrompt.NextWordStart(const value : string; const caret : Integer) : Integer;
+var
+  i, len : Integer;
+begin
+  len := Length(value);
+  i := caret;
+  while (i < len) and (value[i + 1] <> ' ') do
+    Inc(i);
+  while (i < len) and (value[i + 1] = ' ') do
+    Inc(i);
+  result := i;
+end;
+
 function TTextPrompt.Show(const console : IAnsiConsole) : string;
 var
   buffer : string;
+  caret  : Integer;
+  target : Integer;
+  ctrl   : Boolean;
   key    : TConsoleKeyInfo;
   ch     : Char;
   vr     : TPromptValidationResult;
@@ -358,12 +430,14 @@ begin
   while not committed do
   begin
     buffer := '';
+    caret := 0;
     DrawPromptLine(console);
     Inc(FRenderedLineCount);
 
     while True do
     begin
       key := console.Input.ReadKey(True);
+      ctrl := TConsoleModifier.Control in key.Modifiers;
       case key.Key of
         TConsoleKey.Enter:
         begin
@@ -413,24 +487,74 @@ begin
           // No default -> ignore Escape
         end;
 
-        TConsoleKey.Backspace:
-        begin
-          if Length(buffer) > 0 then
+        TConsoleKey.LeftArrow:
+          if ctrl then
           begin
-            SetLength(buffer, Length(buffer) - 1);
-            EmitPlain(console, #8 + ' ' + #8);
+            target := PrevWordStart(buffer, caret);
+            if target < caret then
+            begin
+              EmitControl(console, ESC + '[' + IntToStr(caret - target) + 'D');
+              caret := target;
+            end;
+          end
+          else if caret > 0 then
+          begin
+            Dec(caret);
+            EmitControl(console, ESC + '[1D');
           end;
-        end;
+
+        TConsoleKey.RightArrow:
+          if ctrl then
+          begin
+            target := NextWordStart(buffer, caret);
+            if target > caret then
+            begin
+              EmitControl(console, ESC + '[' + IntToStr(target - caret) + 'C');
+              caret := target;
+            end;
+          end
+          else if caret < Length(buffer) then
+          begin
+            Inc(caret);
+            EmitControl(console, ESC + '[1C');
+          end;
+
+        TConsoleKey.Home:
+          if caret > 0 then
+          begin
+            EmitControl(console, ESC + '[' + IntToStr(caret) + 'D');
+            caret := 0;
+          end;
+
+        TConsoleKey.&End:
+          if caret < Length(buffer) then
+          begin
+            EmitControl(console, ESC + '[' + IntToStr(Length(buffer) - caret) + 'C');
+            caret := Length(buffer);
+          end;
+
+        TConsoleKey.Backspace:
+          if caret > 0 then
+          begin
+            Delete(buffer, caret, 1);
+            Dec(caret);
+            RedrawInput(console, buffer, caret, True);
+          end;
+
+        TConsoleKey.Delete:
+          if caret < Length(buffer) then
+          begin
+            Delete(buffer, caret + 1, 1);
+            RedrawInput(console, buffer, caret, True);
+          end;
 
       else
         ch := key.KeyChar;
         if (ch >= #32) and (ch <> #127) then
         begin
-          buffer := buffer + ch;
-          if FSecret then
-            EmitPlain(console, FMask)
-          else
-            EmitPlain(console, ch);
+          Insert(ch, buffer, caret + 1);
+          Inc(caret);
+          RedrawInput(console, buffer, caret, False);
         end;
       end;
     end;
