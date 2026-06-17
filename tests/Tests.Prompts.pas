@@ -38,6 +38,7 @@ type
     [Test] procedure Text_Delete_RemovesAtCaret;
     [Test] procedure Text_End_MovesBackToLineEnd;
     [Test] procedure Text_CtrlLeft_JumpsToWordStart;
+    [Test] procedure Text_UpArrow_MovesUpOneVisualRow;
     [Test] procedure Text_ValidatorRejectsThenAccepts;
     [Test] procedure Text_Secret_MasksInOutput;
     [Test] procedure Text_Choices_RejectsNonMember;
@@ -269,6 +270,24 @@ begin
   input.Enqueue(TConsoleKey.Enter);
   value := TextPrompt.Show(console);
   Assert.AreEqual('foo Xbar', value);
+end;
+
+procedure TPromptTests.Text_UpArrow_MovesUpOneVisualRow;
+var
+  console : IAnsiConsole;
+  input   : TScriptedConsoleInput;
+  captured : ICapturedAnsiOutput;
+  value   : string;
+begin
+  // Console width 80, empty suffix -> prompt width 0. After 85 chars the caret
+  // sits on row 1; UpArrow moves it back one row (80 chars) to offset 5.
+  BuildScripted(console, input, captured);
+  input.Enqueue(StringOfChar('a', 85));
+  input.Enqueue(TConsoleKey.UpArrow);
+  input.Enqueue('X');
+  input.Enqueue(TConsoleKey.Enter);
+  value := TextPrompt.WithPromptSuffix('').Show(console);
+  Assert.AreEqual(StringOfChar('a', 5) + 'X' + StringOfChar('a', 80), value);
 end;
 
 procedure TPromptTests.Text_ValidatorRejectsThenAccepts;

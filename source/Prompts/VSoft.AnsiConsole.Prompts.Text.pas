@@ -91,7 +91,9 @@ type
     FClearOnFinish           : Boolean;
     FRenderedLineCount       : Integer;
     procedure DrawPromptLine(const console : IAnsiConsole);
-    procedure RedrawInput(const console : IAnsiConsole; const value : string; const caret : Integer; const shrunk : Boolean);
+    function  PromptWidth : Integer;
+    function  Displayed(const value : string) : string;
+    procedure MoveCaret(const console : IAnsiConsole; const fromCell, toCell : Integer; const fromPending : Boolean = False);
     function  PrevWordStart(const value : string; const caret : Integer) : Integer;
     function  NextWordStart(const value : string; const caret : Integer) : Integer;
     function  IsValidChoice(const value : string) : Boolean;
@@ -348,29 +350,81 @@ begin
   EmitPlain(console, FPromptSuffix);
 end;
 
-// Repaint the prompt and current input in place and park the cursor at caret.
-// CR (no erase-line) overwrites cells rather than blanking them, which avoids
-// flicker; on a shrink a single trailing space wipes the vacated cell.
-procedure TTextPrompt.RedrawInput(const console : IAnsiConsole; const value : string; const caret : Integer; const shrunk : Boolean);
+// Visible width of the prompt prefix (prompt markup + choices + default +
+// suffix). Used to map a caret offset to its wrapped (row, column) position.
+function TTextPrompt.PromptWidth : Integer;
 var
-  shown : string;
-  back  : Integer;
+  promptMarkup : IMarkup;
+  joined       : string;
+  i            : Integer;
 begin
-  EmitControl(console, #13);
-  DrawPromptLine(console);
-  if FSecret then
-    shown := StringOfChar(FMask, Length(value))
-  else
-    shown := value;
-  EmitPlain(console, shown);
-  back := Length(shown) - caret;
-  if shrunk then
+  result := 0;
+  if FPrompt <> '' then
   begin
-    EmitPlain(console, ' ');
-    Inc(back);
+    promptMarkup := Markup(FPrompt);
+    result := result + promptMarkup.Length;
   end;
-  if back > 0 then
-    EmitControl(console, ESC + '[' + IntToStr(back) + 'D');
+  if FShowChoices and (Length(FChoices) > 0) then
+  begin
+    joined := '';
+    for i := 0 to High(FChoices) do
+    begin
+      if i > 0 then joined := joined + '/';
+      joined := joined + FChoices[i];
+    end;
+    result := result + 3 + Length(joined);
+  end;
+  if FHasDefault and not FSecret and FShowDefaultValue then
+    result := result + 3 + Length(FDefault);
+  result := result + Length(FPromptSuffix);
+end;
+
+function TTextPrompt.Displayed(const value : string) : string;
+begin
+  if FSecret then
+    result := StringOfChar(FMask, Length(value))
+  else
+    result := value;
+end;
+
+// Move the terminal cursor between two positions in the input, given as
+// character offsets after the prompt. Both are mapped through the console
+// width so the move stays correct when the input wraps across rows.
+// fromPending marks that the cursor just printed up to fromCell: a terminal
+// with delayed end-of-line wrap then sits on the last column of the previous
+// row rather than column 0 of the next one, so that row is used as the origin.
+procedure TTextPrompt.MoveCaret(const console : IAnsiConsole; const fromCell, toCell : Integer; const fromPending : Boolean = False);
+var
+  width   : Integer;
+  prompt  : Integer;
+  fromAbs : Integer;
+  fromRow : Integer;
+  toRow   : Integer;
+  toCol   : Integer;
+  seq     : string;
+begin
+  if fromCell = toCell then
+    Exit;
+  width := console.Profile.Width;
+  if width < 1 then
+    width := 1;
+  prompt := PromptWidth;
+  fromAbs := prompt + fromCell;
+  if fromPending and (fromAbs > 0) and (fromAbs mod width = 0) then
+    fromRow := fromAbs div width - 1
+  else
+    fromRow := fromAbs div width;
+  toRow := (prompt + toCell) div width;
+  toCol := (prompt + toCell) mod width;
+  seq := '';
+  if toRow < fromRow then
+    seq := seq + ESC + '[' + IntToStr(fromRow - toRow) + 'A'
+  else if toRow > fromRow then
+    seq := seq + ESC + '[' + IntToStr(toRow - fromRow) + 'B';
+  seq := seq + #13;
+  if toCol > 0 then
+    seq := seq + ESC + '[' + IntToStr(toCol) + 'C';
+  EmitControl(console, seq);
 end;
 
 // Caret position at the start of the word to the left (skips spaces, then the
@@ -407,6 +461,8 @@ var
   buffer : string;
   caret  : Integer;
   target : Integer;
+  width  : Integer;
+  tail   : string;
   ctrl   : Boolean;
   key    : TConsoleKeyInfo;
   ch     : Char;
@@ -488,64 +544,88 @@ begin
         end;
 
         TConsoleKey.LeftArrow:
-          if ctrl then
           begin
-            target := PrevWordStart(buffer, caret);
-            if target < caret then
-            begin
-              EmitControl(console, ESC + '[' + IntToStr(caret - target) + 'D');
-              caret := target;
-            end;
-          end
-          else if caret > 0 then
-          begin
-            Dec(caret);
-            EmitControl(console, ESC + '[1D');
+            if ctrl then
+              target := PrevWordStart(buffer, caret)
+            else if caret > 0 then
+              target := caret - 1
+            else
+              target := caret;
+            MoveCaret(console, caret, target);
+            caret := target;
           end;
 
         TConsoleKey.RightArrow:
-          if ctrl then
           begin
-            target := NextWordStart(buffer, caret);
-            if target > caret then
-            begin
-              EmitControl(console, ESC + '[' + IntToStr(target - caret) + 'C');
-              caret := target;
-            end;
-          end
-          else if caret < Length(buffer) then
-          begin
-            Inc(caret);
-            EmitControl(console, ESC + '[1C');
+            if ctrl then
+              target := NextWordStart(buffer, caret)
+            else if caret < Length(buffer) then
+              target := caret + 1
+            else
+              target := caret;
+            MoveCaret(console, caret, target);
+            caret := target;
           end;
 
         TConsoleKey.Home:
-          if caret > 0 then
           begin
-            EmitControl(console, ESC + '[' + IntToStr(caret) + 'D');
+            MoveCaret(console, caret, 0);
             caret := 0;
           end;
 
         TConsoleKey.&End:
-          if caret < Length(buffer) then
           begin
-            EmitControl(console, ESC + '[' + IntToStr(Length(buffer) - caret) + 'C');
+            MoveCaret(console, caret, Length(buffer));
             caret := Length(buffer);
+          end;
+
+        TConsoleKey.UpArrow:
+          begin
+            width := console.Profile.Width;
+            // Only when there is a row above (the input has wrapped).
+            if (width > 0) and ((PromptWidth + caret) >= width) then
+            begin
+              target := caret - width;
+              if target < 0 then
+                target := 0;
+              MoveCaret(console, caret, target);
+              caret := target;
+            end;
+          end;
+
+        TConsoleKey.DownArrow:
+          begin
+            width := console.Profile.Width;
+            // Only when there is a row below the caret.
+            if (width > 0) and
+               (((PromptWidth + caret) div width) < ((PromptWidth + Length(buffer)) div width)) then
+            begin
+              target := caret + width;
+              if target > Length(buffer) then
+                target := Length(buffer);
+              MoveCaret(console, caret, target);
+              caret := target;
+            end;
           end;
 
         TConsoleKey.Backspace:
           if caret > 0 then
           begin
             Delete(buffer, caret, 1);
+            MoveCaret(console, caret, caret - 1);
             Dec(caret);
-            RedrawInput(console, buffer, caret, True);
+            tail := Displayed(Copy(buffer, caret + 1, MaxInt));
+            EmitPlain(console, tail + ' ');
+            MoveCaret(console, Length(buffer) + 1, caret, True);
           end;
 
         TConsoleKey.Delete:
           if caret < Length(buffer) then
           begin
             Delete(buffer, caret + 1, 1);
-            RedrawInput(console, buffer, caret, True);
+            tail := Displayed(Copy(buffer, caret + 1, MaxInt));
+            EmitPlain(console, tail + ' ');
+            MoveCaret(console, Length(buffer) + 1, caret, True);
           end;
 
       else
@@ -553,8 +633,10 @@ begin
         if (ch >= #32) and (ch <> #127) then
         begin
           Insert(ch, buffer, caret + 1);
+          tail := Displayed(Copy(buffer, caret + 1, MaxInt));
+          EmitPlain(console, tail);
           Inc(caret);
-          RedrawInput(console, buffer, caret, False);
+          MoveCaret(console, Length(buffer), caret, True);
         end;
       end;
     end;
