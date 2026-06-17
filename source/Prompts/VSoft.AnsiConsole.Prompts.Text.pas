@@ -42,6 +42,10 @@ type
     function WithValidator(const validator : TTextPromptValidator) : ITextPrompt;
     function WithAllowEmpty(value : Boolean) : ITextPrompt;
 
+    { Separator emitted after the prompt (and choices/default), before the
+      typed input. Defaults to ': '. Pass '' to drop it entirely. }
+    function WithPromptSuffix(const value : string) : ITextPrompt;
+
     { Choice support. When at least one choice is added, the input is
       validated against the choice list before commit; non-matching input
       is rejected with FInvalidChoiceMessage. ShowChoices controls whether
@@ -68,6 +72,7 @@ type
   TTextPrompt = class(TInterfacedObject, ITextPrompt)
   strict private
     FPrompt              : string;
+    FPromptSuffix        : string;
     FDefault             : string;
     FHasDefault          : Boolean;
     FSecret              : Boolean;
@@ -95,6 +100,7 @@ type
     function WithSecret(mask : Char) : ITextPrompt; overload;
     function WithValidator(const validator : TTextPromptValidator) : ITextPrompt;
     function WithAllowEmpty(value : Boolean) : ITextPrompt;
+    function WithPromptSuffix(const value : string) : ITextPrompt;
     function WithChoice(const value : string) : ITextPrompt;
     function WithShowChoices(value : Boolean) : ITextPrompt;
     function WithShowDefaultValue(value : Boolean) : ITextPrompt;
@@ -165,6 +171,7 @@ constructor TTextPrompt.Create;
 begin
   inherited Create;
   FMask                  := '*';
+  FPromptSuffix          := ': ';
   FAllowEmpty            := True;
   FShowChoices           := True;
   FShowDefaultValue      := True;
@@ -213,6 +220,12 @@ end;
 function TTextPrompt.WithAllowEmpty(value : Boolean) : ITextPrompt;
 begin
   FAllowEmpty := value;
+  result := Self;
+end;
+
+function TTextPrompt.WithPromptSuffix(const value : string) : ITextPrompt;
+begin
+  FPromptSuffix := value;
   result := Self;
 end;
 
@@ -317,7 +330,7 @@ begin
     EmitStyled(console, FDefault, FDefaultValueStyle);
     EmitPlain(console, ')');
   end;
-  EmitPlain(console, ': ');
+  EmitPlain(console, FPromptSuffix);
 end;
 
 function TTextPrompt.Show(const console : IAnsiConsole) : string;

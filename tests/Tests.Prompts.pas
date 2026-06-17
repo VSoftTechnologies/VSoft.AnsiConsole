@@ -30,6 +30,8 @@ type
     [Test] procedure Text_Enter_ReturnsTypedValue;
     [Test] procedure Text_EmptyEnter_ReturnsDefault;
     [Test] procedure Text_Backspace_PopsLastChar;
+    [Test] procedure Text_PromptSuffix_Custom_Replaces;
+    [Test] procedure Text_PromptSuffix_Empty_OmitsDefaultColon;
     [Test] procedure Text_ValidatorRejectsThenAccepts;
     [Test] procedure Text_Secret_MasksInOutput;
     [Test] procedure Text_Choices_RejectsNonMember;
@@ -136,6 +138,33 @@ begin
   input.Enqueue(TConsoleKey.Enter);
   value := TextPrompt.Show(console);
   Assert.AreEqual('abX', value);
+end;
+
+procedure TPromptTests.Text_PromptSuffix_Custom_Replaces;
+var
+  console : IAnsiConsole;
+  input   : TScriptedConsoleInput;
+  captured : ICapturedAnsiOutput;
+begin
+  BuildScripted(console, input, captured);
+  input.Enqueue('x');
+  input.Enqueue(TConsoleKey.Enter);
+  TextPrompt.WithPrompt('Name').WithPromptSuffix(' > ').Show(console);
+  Assert.IsTrue(Pos(' > ', captured.Text) > 0, 'Custom suffix should be emitted');
+  Assert.IsFalse(Pos('Name: ', captured.Text) > 0, 'Default colon suffix should not appear');
+end;
+
+procedure TPromptTests.Text_PromptSuffix_Empty_OmitsDefaultColon;
+var
+  console : IAnsiConsole;
+  input   : TScriptedConsoleInput;
+  captured : ICapturedAnsiOutput;
+begin
+  BuildScripted(console, input, captured);
+  input.Enqueue('x');
+  input.Enqueue(TConsoleKey.Enter);
+  TextPrompt.WithPrompt('Name').WithPromptSuffix('').Show(console);
+  Assert.IsFalse(Pos(': ', captured.Text) > 0, 'Empty suffix should omit the default '': ''');
 end;
 
 procedure TPromptTests.Text_ValidatorRejectsThenAccepts;
