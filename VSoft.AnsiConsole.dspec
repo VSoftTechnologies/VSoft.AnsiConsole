@@ -1,124 +1,43 @@
-{
-    "metadata": {
-        "id": "VSoft.AnsiConsole",
-        "version": "0.1.1",
-        "description": "Advanced console library",
-        "authors": "Vincent Parrett",
-        "projectUrl": "https://github.com/VSoftTechnologies/VSoft.AnsiConsole",
-        "repositoryUrl": "https://github.com/VSoftTechnologies/VSoft.AnsiConsole",
-        "repositoryCommit": "#HASH#",
-        "license": "MIT",
-        "copyright": "Vincent Parrett and contributors",
-        "tags": "console terminal",
-        "readme": "README.md"
-    },
-    "targetPlatforms": [
-        {
-            "compiler": "XE3",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        },
-        {
-            "compiler": "XE4",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        },
-        {
-            "compiler": "XE5",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        },
-        {
-            "compiler": "XE6",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        },
-        {
-            "compiler": "XE7",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        },
-        {
-            "compiler": "XE8",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        },
-        {
-            "compiler": "10.0",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        },
-        {
-            "compiler": "10.1",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        },
-        {
-            "compiler": "10.2",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        },
-        {
-            "compiler": "10.3",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        },
-        {
-            "compiler": "10.4",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        },
-        {
-            "compiler": "11.0",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        },
-        {
-            "compiler": "12.0",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        },
-        {
-            "compiler": "13.0",
-            "platforms": "Win32, Win64",
-            "template": "default"
-        }
-    ],
-    "templates": [
-        {
-            "name": "default",
-            "dependencies": [
-                {
-                    "id": "VSoft.System.Console",
-                    "version": "[1.2.0,]"
-                }
-            ],
-            "source": [
-                {
-                    "src": "source\\**.pas",
-                    "dest": "source"
-                },
-                {
-                    "src": "packages\\Rad Studio $Compiler$\\*.dproj",
-                    "dest": "packages\\Rad Studio $Compiler$"
-                },
-                {
-                    "src": "packages\\Rad Studio $Compiler$\\*.dpk",
-                    "dest": "packages\\Rad Studio $Compiler$"
-                }
-            ],
-            "searchPaths": [
-                {
-                    "path": "source"
-                }
-            ],
-            "build": [
-                {
-                    "id": "build",
-                    "project": "packages\\Rad Studio $Compiler$\\VSoft.AnsiConsoleR.dproj",
-                    "config": "Release"
-                }
-            ]
-        }
-    ]
-}
+# DPM package spec file
+min dpm client version: 1.0.0
+metadata:
+  id: VSoft.AnsiConsole
+  version: 0.1.4
+  description: Advanced console library
+  authors:
+    - Vincent Parrett
+  projectUrl: https://github.com/VSoftTechnologies/VSoft.AnsiConsole
+  repositoryUrl: https://github.com/VSoftTechnologies/VSoft.AnsiConsole
+  repositoryCommit: #HASH#
+  license: MIT
+  copyright: Vincent Parrett and contributors
+  tags:
+    - console
+    - terminal
+    - ansi
+  readme: README.md
+variables:
+  packagesource: RAD Studio $compilernoprefix$
+targetPlatforms:
+  - compiler from: delphixe3
+    compiler to: delphi12.0
+    platforms:
+      - win32
+      - win64
+  - compiler: delphi13.0
+    platforms:
+      - win32
+      - win64
+      - winarm64ec
+templates:
+  - name: default
+    dependencies:
+      - id: VSoft.System.Console
+        version: '[1.2.2,]'
+    source:
+      - src: ./LICENSE
+      - src: ./source/**.pas
+      - src: ./Packages/$packageSource$/*.dpk
+      - src: ./Packages/$packageSource$/*.dproj
+    build:
+      - project: ./Packages/$packageSource$/VSoft.AnsiConsoleR.dproj
