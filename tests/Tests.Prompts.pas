@@ -30,6 +30,15 @@ type
     [Test] procedure Text_Enter_ReturnsTypedValue;
     [Test] procedure Text_EmptyEnter_ReturnsDefault;
     [Test] procedure Text_Backspace_PopsLastChar;
+    [Test] procedure Text_PromptSuffix_Custom_Replaces;
+    [Test] procedure Text_PromptSuffix_Empty_OmitsDefaultColon;
+    [Test] procedure Text_LeftArrow_Insert_InsertsMidLine;
+    [Test] procedure Text_Home_Insert_AtStart;
+    [Test] procedure Text_Backspace_MidLine_RemovesBeforeCaret;
+    [Test] procedure Text_Delete_RemovesAtCaret;
+    [Test] procedure Text_End_MovesBackToLineEnd;
+    [Test] procedure Text_CtrlLeft_JumpsToWordStart;
+    [Test] procedure Text_UpArrow_MovesUpOneVisualRow;
     [Test] procedure Text_ValidatorRejectsThenAccepts;
     [Test] procedure Text_Secret_MasksInOutput;
     [Test] procedure Text_Choices_RejectsNonMember;
@@ -136,6 +145,149 @@ begin
   input.Enqueue(TConsoleKey.Enter);
   value := TextPrompt.Show(console);
   Assert.AreEqual('abX', value);
+end;
+
+procedure TPromptTests.Text_PromptSuffix_Custom_Replaces;
+var
+  console : IAnsiConsole;
+  input   : TScriptedConsoleInput;
+  captured : ICapturedAnsiOutput;
+begin
+  BuildScripted(console, input, captured);
+  input.Enqueue('x');
+  input.Enqueue(TConsoleKey.Enter);
+  TextPrompt.WithPrompt('Name').WithPromptSuffix(' > ').Show(console);
+  Assert.IsTrue(Pos(' > ', captured.Text) > 0, 'Custom suffix should be emitted');
+  Assert.IsFalse(Pos('Name: ', captured.Text) > 0, 'Default colon suffix should not appear');
+end;
+
+procedure TPromptTests.Text_PromptSuffix_Empty_OmitsDefaultColon;
+var
+  console : IAnsiConsole;
+  input   : TScriptedConsoleInput;
+  captured : ICapturedAnsiOutput;
+begin
+  BuildScripted(console, input, captured);
+  input.Enqueue('x');
+  input.Enqueue(TConsoleKey.Enter);
+  TextPrompt.WithPrompt('Name').WithPromptSuffix('').Show(console);
+  Assert.IsFalse(Pos(': ', captured.Text) > 0, 'Empty suffix should omit the default '': ''');
+end;
+
+procedure TPromptTests.Text_LeftArrow_Insert_InsertsMidLine;
+var
+  console : IAnsiConsole;
+  input   : TScriptedConsoleInput;
+  captured : ICapturedAnsiOutput;
+  value   : string;
+begin
+  BuildScripted(console, input, captured);
+  input.Enqueue('ac');
+  input.Enqueue(TConsoleKey.LeftArrow);
+  input.Enqueue('b');
+  input.Enqueue(TConsoleKey.Enter);
+  value := TextPrompt.Show(console);
+  Assert.AreEqual('abc', value);
+end;
+
+procedure TPromptTests.Text_Home_Insert_AtStart;
+var
+  console : IAnsiConsole;
+  input   : TScriptedConsoleInput;
+  captured : ICapturedAnsiOutput;
+  value   : string;
+begin
+  BuildScripted(console, input, captured);
+  input.Enqueue('bc');
+  input.Enqueue(TConsoleKey.Home);
+  input.Enqueue('a');
+  input.Enqueue(TConsoleKey.Enter);
+  value := TextPrompt.Show(console);
+  Assert.AreEqual('abc', value);
+end;
+
+procedure TPromptTests.Text_Backspace_MidLine_RemovesBeforeCaret;
+var
+  console : IAnsiConsole;
+  input   : TScriptedConsoleInput;
+  captured : ICapturedAnsiOutput;
+  value   : string;
+begin
+  BuildScripted(console, input, captured);
+  input.Enqueue('abc');
+  input.Enqueue(TConsoleKey.LeftArrow);
+  input.Enqueue(TConsoleKey.Backspace);
+  input.Enqueue(TConsoleKey.Enter);
+  value := TextPrompt.Show(console);
+  Assert.AreEqual('ac', value);
+end;
+
+procedure TPromptTests.Text_Delete_RemovesAtCaret;
+var
+  console : IAnsiConsole;
+  input   : TScriptedConsoleInput;
+  captured : ICapturedAnsiOutput;
+  value   : string;
+begin
+  BuildScripted(console, input, captured);
+  input.Enqueue('abc');
+  input.Enqueue(TConsoleKey.Home);
+  input.Enqueue(TConsoleKey.Delete);
+  input.Enqueue(TConsoleKey.Enter);
+  value := TextPrompt.Show(console);
+  Assert.AreEqual('bc', value);
+end;
+
+procedure TPromptTests.Text_End_MovesBackToLineEnd;
+var
+  console : IAnsiConsole;
+  input   : TScriptedConsoleInput;
+  captured : ICapturedAnsiOutput;
+  value   : string;
+begin
+  BuildScripted(console, input, captured);
+  input.Enqueue('ab');
+  input.Enqueue(TConsoleKey.Home);
+  input.Enqueue(TConsoleKey.&End);
+  input.Enqueue('c');
+  input.Enqueue(TConsoleKey.Enter);
+  value := TextPrompt.Show(console);
+  Assert.AreEqual('abc', value);
+end;
+
+procedure TPromptTests.Text_CtrlLeft_JumpsToWordStart;
+var
+  console : IAnsiConsole;
+  input   : TScriptedConsoleInput;
+  captured : ICapturedAnsiOutput;
+  value   : string;
+begin
+  BuildScripted(console, input, captured);
+  input.Enqueue('foo bar');
+  // Ctrl+Left from the end jumps to the start of 'bar' (not one char left).
+  input.Enqueue(TConsoleKeyInfo.Create(#0, TConsoleKey.LeftArrow, False, False, True));
+  input.Enqueue('X');
+  input.Enqueue(TConsoleKey.Enter);
+  value := TextPrompt.Show(console);
+  Assert.AreEqual('foo Xbar', value);
+end;
+
+procedure TPromptTests.Text_UpArrow_MovesUpOneVisualRow;
+var
+  console : IAnsiConsole;
+  input   : TScriptedConsoleInput;
+  captured : ICapturedAnsiOutput;
+  value   : string;
+begin
+  // Console width 80, empty suffix -> prompt width 0. After 85 chars the caret
+  // sits on row 1; UpArrow moves it back one row (80 chars) to offset 5.
+  BuildScripted(console, input, captured);
+  input.Enqueue(StringOfChar('a', 85));
+  input.Enqueue(TConsoleKey.UpArrow);
+  input.Enqueue('X');
+  input.Enqueue(TConsoleKey.Enter);
+  value := TextPrompt.WithPromptSuffix('').Show(console);
+  Assert.AreEqual(StringOfChar('a', 5) + 'X' + StringOfChar('a', 80), value);
 end;
 
 procedure TPromptTests.Text_ValidatorRejectsThenAccepts;
