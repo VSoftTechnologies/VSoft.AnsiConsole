@@ -20,20 +20,15 @@ variables:
   packagesource: RAD Studio $compilernoprefix$
 targetPlatforms:
   - compiler from: delphixe3
-    compiler to: delphi12.0
+    compiler to: delphi13.0
     platforms:
       - win32
       - win64
-  - compiler: delphi13.0
-    platforms:
-      - win32
-      - win64
-      - winarm64ec
 templates:
   - name: default
     dependencies:
       - id: VSoft.System.Console
-        version: "[1.2.4,]"
+        version: '[1.2.4,]'
     source:
       - src: ./LICENSE
       - src: ./source/**.pas
