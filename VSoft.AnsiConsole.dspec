@@ -3,12 +3,12 @@ min dpm client version: 1.0.0
 metadata:
   id: VSoft.AnsiConsole
   version: 0.3.0
-  description: Advanced console library
+  description: 'A Delphi library for writing rich, interactive console applications. Tables, trees, live progress, prompts, syntax-coloured exceptions, ANSI colour, hyperlinks, emoji, FIGlet text, calendars, charts, recorder + HTML export — composable widgets that render through a unified pipeline.'
   authors:
     - Vincent Parrett
   projectUrl: https://github.com/VSoftTechnologies/VSoft.AnsiConsole
   repositoryUrl: https://github.com/VSoftTechnologies/VSoft.AnsiConsole
-  repositoryCommit: #HASH#
+  repositoryCommit: 81fd7578123815367b8cff4c6adb03f8d89535aa
   license: MIT
   copyright: Vincent Parrett and contributors
   tags:
@@ -28,7 +28,7 @@ templates:
   - name: default
     dependencies:
       - id: VSoft.System.Console
-        version: "[1.2.4,]"
+        version: '[1.2.4,]'
     source:
       - src: ./LICENSE
       - src: ./source/**.pas
