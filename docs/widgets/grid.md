@@ -52,6 +52,12 @@ g.AddColumn(TGridColumnWidth.Star, 2);    // gets 2/3 of leftover
 g.AddColumn(TGridColumnWidth.Star, 1);    // gets 1/3 of leftover
 ```
 
+A `Star` column only stretches to fill the leftover when the grid has
+`WithExpand(True)`; otherwise it is sized to its content like `Auto`. Either
+way it never takes more than the fixed and auto columns leave - when the
+content is too wide for the grid, star columns shrink (and their content
+wraps) before any auto column is squeezed.
+
 Convenience methods cover the common cases:
 
 ```pascal

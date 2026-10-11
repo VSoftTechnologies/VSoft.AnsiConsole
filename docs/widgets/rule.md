@@ -32,7 +32,7 @@ Fluent setters return a copy:
 
 | Method | Purpose |
 | --- | --- |
-| `WithTitle(value)` | Set or change the inline title. Markup is supported (`'[bold]Section[/]'`). |
+| `WithTitle(value)` | Set or change the inline title. Markup is supported (`'[bold]Section[/]'`); write a literal bracket as `[[` / `]]`. |
 | `WithAlignment(value)` | Where the title sits — `TAlignment.Left` / `Center` / `Right`. Default `Center`. |
 | `WithBorder(value)` | Glyph set — `TRuleBorder.Default` (light), `Ascii`, `Heavy`, `Double`. |
 | `WithStyle(value)` | Style applied to the border characters AND the title text. |

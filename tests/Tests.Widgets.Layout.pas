@@ -46,6 +46,8 @@ type
     [Test] procedure Grid_FixedColumns_RendersSideBySide;
     [Test] procedure Grid_StarColumn_NoExpand_SizesToNaturalContent;
     [Test] procedure Grid_StarColumn_Expand_AbsorbsLeftover;
+    [Test] procedure Grid_StarColumn_NoExpand_TooWide_ShrinksStarNotAuto;
+    [Test] procedure Grid_StarColumn_NoExpand_TooWide_StarTakesWhatAutoLeaves;
 
     [Test] procedure Panel_AsciiBorder_SingleLineChild_Produces3Lines;
     [Test] procedure Panel_WithHeader_InsertsHeaderText;
@@ -270,6 +272,45 @@ begin
   g.AddRow([Text('abc'), Text('hello')]);
   console.Write(g);
   Assert.AreEqual('abc hello' + StringOfChar(' ', 11), sink.Text);
+end;
+
+procedure TLayoutWidgetTests.Grid_StarColumn_NoExpand_TooWide_ShrinksStarNotAuto;
+var
+  console : IAnsiConsole;
+  sink    : ICapturedAnsiOutput;
+  g       : IGrid;
+begin
+  // Expand off, star content (28) too wide for maxWidth=20. The star column
+  // is the flexible one: it gives up the excess and folds, while the auto
+  // label column keeps its natural 5 cells.
+  //   auto(5) + gutter(1) + star(14) = 20
+  console := BuildPlainWithSink(20, False, sink);
+  g := Grid.WithGutter(1).AddAutoColumn.AddStarColumn(1);
+  g.AddRow([Text('Name:'), Text(StringOfChar('x', 28))]);
+  console.Write(g);
+  Assert.AreEqual(
+    'Name: ' + StringOfChar('x', 14) + sLineBreak +
+    '      ' + StringOfChar('x', 14),
+    sink.Text);
+end;
+
+procedure TLayoutWidgetTests.Grid_StarColumn_NoExpand_TooWide_StarTakesWhatAutoLeaves;
+var
+  console : IAnsiConsole;
+  sink    : ICapturedAnsiOutput;
+  g       : IGrid;
+begin
+  // Same rule as Expand=True: auto columns are sized first and the star
+  // column gets what is left, even when the auto column is the wider one.
+  //   auto(12) + gutter(1) + star(7) = 20
+  console := BuildPlainWithSink(20, False, sink);
+  g := Grid.WithGutter(1).AddAutoColumn.AddStarColumn(1);
+  g.AddRow([Text('LongerLabel:'), Text(StringOfChar('x', 10))]);
+  console.Write(g);
+  Assert.AreEqual(
+    'LongerLabel: ' + StringOfChar('x', 7) + sLineBreak +
+    StringOfChar(' ', 13) + 'xxx    ',
+    sink.Text);
 end;
 
 procedure TLayoutWidgetTests.Panel_AsciiBorder_SingleLineChild_Produces3Lines;

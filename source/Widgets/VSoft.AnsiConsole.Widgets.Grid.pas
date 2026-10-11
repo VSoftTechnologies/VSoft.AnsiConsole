@@ -234,6 +234,30 @@ var
   m          : TMeasurement;
   autoWidth  : Integer;
   leftover   : Integer;
+
+  // Take `excess` cells off the columns of `kind`, one cell at a time from
+  // whichever is currently widest, never going below `minWidth`. `excess` is
+  // left holding whatever could not be taken.
+  procedure Shave(kind : TGridColumnWidth; minWidth : Integer; var excess : Integer);
+  var
+    col    : Integer;
+    widest : Integer;
+  begin
+    while excess > 0 do
+    begin
+      widest := -1;
+      for col := 0 to n - 1 do
+      begin
+        if (FColumns[col].Kind = kind) and (result[col] > minWidth) and
+           ((widest < 0) or (result[col] > result[widest])) then
+          widest := col;
+      end;
+      if widest < 0 then Break;
+      Dec(result[widest]);
+      Dec(excess);
+    end;
+  end;
+
 begin
   n := Length(FColumns);
   SetLength(result, n);
@@ -313,31 +337,20 @@ begin
     end;
   end;
 
-  // If total exceeds maxWidth (common when auto columns want more than fits),
-  // squeeze auto columns proportionally.
+  // If total exceeds maxWidth (common when content wants more than fits),
+  // squeeze. Star columns give way first: they take what the fixed and auto
+  // columns leave whether or not the grid expands (FExpand only decides if
+  // they grow past their content), but keep one cell so their content is
+  // never dropped. Auto columns are squeezed only once the stars have
+  // nothing left to give.
   totalFixed := gutters;
   for i := 0 to n - 1 do
     Inc(totalFixed, result[i]);
   if totalFixed > maxWidth then
   begin
     leftover := totalFixed - maxWidth;
-    // shave from the widest auto columns first, one cell at a time
-    while leftover > 0 do
-    begin
-      autoWidth := -1;
-      r := -1;
-      for i := 0 to n - 1 do
-      begin
-        if (FColumns[i].Kind = TGridColumnWidth.Auto) and (result[i] > autoWidth) then
-        begin
-          autoWidth := result[i];
-          r := i;
-        end;
-      end;
-      if (r < 0) or (autoWidth <= 0) then Break;
-      Dec(result[r]);
-      Dec(leftover);
-    end;
+    Shave(TGridColumnWidth.Star, 1, leftover);
+    Shave(TGridColumnWidth.Auto, 0, leftover);
   end;
 end;
 

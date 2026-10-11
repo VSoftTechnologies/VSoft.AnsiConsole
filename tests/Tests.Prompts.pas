@@ -39,6 +39,7 @@ type
     [Test] procedure Text_End_MovesBackToLineEnd;
     [Test] procedure Text_CtrlLeft_JumpsToWordStart;
     [Test] procedure Text_UpArrow_MovesUpOneVisualRow;
+    [Test] procedure Text_DownArrow_WordWrappedPrompt_UsesRenderedLayout;
     [Test] procedure Text_ValidatorRejectsThenAccepts;
     [Test] procedure Text_Secret_MasksInOutput;
     [Test] procedure Text_Choices_RejectsNonMember;
@@ -288,6 +289,32 @@ begin
   input.Enqueue(TConsoleKey.Enter);
   value := TextPrompt.WithPromptSuffix('').Show(console);
   Assert.AreEqual(StringOfChar('a', 5) + 'X' + StringOfChar('a', 80), value);
+end;
+
+procedure TPromptTests.Text_DownArrow_WordWrappedPrompt_UsesRenderedLayout;
+var
+  console : IAnsiConsole;
+  input   : TScriptedConsoleInput;
+  captured : ICapturedAnsiOutput;
+  value   : string;
+begin
+  // Console width 80. The 91-char prompt wraps at its space, so its second
+  // row holds the 30 'q's and the input starts at column 30 - not column 11,
+  // which is where a prompt folded at exactly 80 cells would have left it.
+  // 55 typed chars therefore run 30..84 and spill onto a third row: from
+  // Home there is a row below, and DownArrow moves the caret onto it (clamped
+  // to the end of the input).
+  BuildScripted(console, input, captured);
+  input.Enqueue(StringOfChar('a', 55));
+  input.Enqueue(TConsoleKey.Home);
+  input.Enqueue(TConsoleKey.DownArrow);
+  input.Enqueue('X');
+  input.Enqueue(TConsoleKey.Enter);
+  value := TextPrompt
+             .WithPrompt(StringOfChar('p', 60) + ' ' + StringOfChar('q', 30))
+             .WithPromptSuffix('')
+             .Show(console);
+  Assert.AreEqual(StringOfChar('a', 55) + 'X', value);
 end;
 
 procedure TPromptTests.Text_ValidatorRejectsThenAccepts;

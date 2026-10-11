@@ -213,8 +213,8 @@ begin
         lines[i] := CropLineToWidth(lines[i], maxWidth, FOverflow = TOverflow.Ellipsis);
     end;
   else
-    // TOverflow.Fold: hard-wrap at maxWidth.
-    lines := SplitLines(FSegments, maxWidth);
+    // TOverflow.Fold: word-wrap at maxWidth.
+    lines := WrapLines(FSegments, maxWidth);
   end;
 
   SetLength(result, 0);

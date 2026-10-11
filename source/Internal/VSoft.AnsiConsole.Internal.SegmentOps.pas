@@ -33,8 +33,23 @@ function MergeSegments(const segs : TAnsiSegments) : TAnsiSegments;
   than maxWidth are split at the boundary. Returns an array of per-line
   segment arrays (the trailing linebreak segment is not included in each line).
 
-  Phase 1: hard character wrap. Word wrap is the Text widget's responsibility. }
+  This is a hard character wrap - it is what containers use to slice a
+  child's already-rendered output into rows. Text-like widgets wrap their own
+  content with WrapLines. }
 function SplitLines(const segs : TAnsiSegments; maxWidth : Integer) : TArray<TAnsiSegments>;
+
+{ Break segments into lines no wider than maxWidth, breaking between words.
+  Explicit TAnsiSegmentFlag.LineBreak segments end a line exactly as they do
+  in SplitLines. A line that is too wide ends at the whitespace before the
+  first word that does not fit, and that whitespace is consumed by the wrap:
+  it neither trails the line it ends nor leads the line it starts. Whitespace
+  anywhere else (indentation, gaps between words that share a line) is
+  content and is kept.
+
+  A word is a run of non-whitespace cells; it may span several segments, so a
+  style change inside a word is not a break opportunity. A word wider than
+  maxWidth on its own starts a new line and is hard-wrapped from there. }
+function WrapLines(const segs : TAnsiSegments; maxWidth : Integer) : TArray<TAnsiSegments>;
 
 { Truncate a single line to maxWidth cells. If the line already fits the
   function returns it unchanged. If `addEllipsis` is True and the line had
@@ -258,6 +273,197 @@ begin
   // flush any remaining partial line
   if Length(line) > 0 then
     NewLine;
+end;
+
+function IsBreakChar(ch : Char) : Boolean;
+begin
+  // Space and tab only: a no-break space (U+00A0) must not wrap.
+  result := (ch = ' ') or (ch = #9);
+end;
+
+{ True for a piece that is a break opportunity. Pieces come out of
+  SplitIntoPieces, where a text piece is all-whitespace or has none. }
+function IsBlankPiece(const piece : TAnsiSegment) : Boolean;
+begin
+  if piece.IsControlCode or piece.IsLineBreak then
+    result := False
+  else if piece.IsWhitespace then
+    result := True
+  else
+    result := (piece.Value <> '') and IsBreakChar(piece.Value[1]);
+end;
+
+{ Cut the text segments of one line into alternating whitespace / word
+  pieces. Whitespace and control-code segments pass through whole. }
+function SplitIntoPieces(const line : TAnsiSegments) : TAnsiSegments;
+var
+  i, j     : Integer;
+  count    : Integer;
+  runStart : Integer;
+  value    : string;
+
+  procedure Push(const piece : TAnsiSegment);
+  begin
+    SetLength(result, count + 1);
+    result[count] := piece;
+    Inc(count);
+  end;
+
+begin
+  SetLength(result, 0);
+  count := 0;
+  for i := 0 to High(line) do
+  begin
+    if line[i].IsControlCode or line[i].IsWhitespace then
+    begin
+      Push(line[i]);
+      Continue;
+    end;
+
+    value := line[i].Value;
+    runStart := 1;
+    for j := 2 to Length(value) + 1 do
+    begin
+      if (j > Length(value)) or (IsBreakChar(value[j]) <> IsBreakChar(value[runStart])) then
+      begin
+        Push(TAnsiSegment.Text(Copy(value, runStart, j - runStart), line[i].Style));
+        runStart := j;
+      end;
+    end;
+  end;
+end;
+
+function WrapLines(const segs : TAnsiSegments; maxWidth : Integer) : TArray<TAnsiSegments>;
+var
+  hardLines : TArray<TAnsiSegments>;
+  pieces    : TAnsiSegments;
+  line      : TAnsiSegments;
+  lineIdx   : Integer;
+  width     : Integer;
+  wordWidth : Integer;
+  wordEnd   : Integer;
+  h, i, k   : Integer;
+  wrapped   : Boolean;   // the current line was started by a wrap
+  remaining : TAnsiSegment;
+  left, right : TAnsiSegment;
+
+  procedure PushPiece(const piece : TAnsiSegment);
+  begin
+    SetLength(line, Length(line) + 1);
+    line[High(line)] := piece;
+    Inc(width, SegmentCellCount(piece));
+  end;
+
+  procedure AddLine(const value : TAnsiSegments);
+  begin
+    SetLength(result, lineIdx + 1);
+    result[lineIdx] := value;
+    Inc(lineIdx);
+  end;
+
+  // End the current line at a wrap point. The whitespace before the wrap is
+  // dropped; a line left with nothing on it is not emitted.
+  procedure WrapHere;
+  var
+    keep : Integer;
+  begin
+    keep := Length(line);
+    while (keep > 0) and IsBlankPiece(line[keep - 1]) do
+      Dec(keep);
+    SetLength(line, keep);
+    if keep > 0 then
+      AddLine(MergeSegments(line));
+    line := nil;
+    width := 0;
+    wrapped := True;
+  end;
+
+begin
+  // Nothing to wrap when every line already fits - which also keeps the
+  // caller's segments exactly as they were.
+  if (maxWidth <= 0) or (TotalCellCount(segs) <= maxWidth) then
+  begin
+    result := SplitLines(segs, maxWidth);
+    Exit;
+  end;
+
+  SetLength(result, 0);
+  lineIdx := 0;
+  hardLines := SplitLines(segs, MaxInt);  // explicit line breaks only
+
+  for h := 0 to High(hardLines) do
+  begin
+    if TotalCellCount(hardLines[h]) <= maxWidth then
+    begin
+      AddLine(hardLines[h]);
+      Continue;
+    end;
+
+    pieces := SplitIntoPieces(hardLines[h]);
+    line := nil;
+    width := 0;
+    wrapped := False;
+    i := 0;
+    while i <= High(pieces) do
+    begin
+      if IsBlankPiece(pieces[i]) then
+      begin
+        // Whitespace straight after a wrap is part of what the wrap consumed.
+        if not (wrapped and (Length(line) = 0)) then
+        begin
+          if width + SegmentCellCount(pieces[i]) <= maxWidth then
+            PushPiece(pieces[i])
+          else
+            WrapHere;
+        end;
+        Inc(i);
+        Continue;
+      end;
+
+      // The word is every piece up to the next whitespace.
+      wordEnd := i;
+      wordWidth := 0;
+      while (wordEnd <= High(pieces)) and (not IsBlankPiece(pieces[wordEnd])) do
+      begin
+        Inc(wordWidth, SegmentCellCount(pieces[wordEnd]));
+        Inc(wordEnd);
+      end;
+
+      if (width > 0) and (width + wordWidth > maxWidth) then
+        WrapHere;
+
+      if width + wordWidth <= maxWidth then
+      begin
+        for k := i to wordEnd - 1 do
+          PushPiece(pieces[k]);
+      end
+      else
+      begin
+        // Wider than a whole line: no break opportunity, so hard-wrap it.
+        for k := i to wordEnd - 1 do
+        begin
+          remaining := pieces[k];
+          while width + SegmentCellCount(remaining) > maxWidth do
+          begin
+            SplitSegmentAt(remaining, maxWidth - width, left, right);
+            if left.Value <> '' then
+              PushPiece(left);
+            AddLine(MergeSegments(line));
+            line := nil;
+            width := 0;
+            wrapped := True;
+            remaining := right;
+          end;
+          if remaining.Value <> '' then
+            PushPiece(remaining);
+        end;
+      end;
+      i := wordEnd;
+    end;
+
+    if Length(line) > 0 then
+      AddLine(MergeSegments(line));
+  end;
 end;
 
 function CropLineToWidth(const line : TAnsiSegments; maxWidth : Integer;

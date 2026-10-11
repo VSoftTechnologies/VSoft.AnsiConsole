@@ -194,7 +194,6 @@ uses
   System.SysUtils,
   VSoft.AnsiConsole.Widgets.Text,
   VSoft.AnsiConsole.Widgets.Markup,
-  VSoft.AnsiConsole.Internal.Cell,
   VSoft.AnsiConsole.Internal.SegmentOps;
 
 function Table : ITable;
@@ -645,7 +644,9 @@ begin
       autoWidth := 0;
       if FShowHeader then
       begin
-        headerLen := CellLength(FColumns[i].Header);
+        // The header is markup - measure what it renders to, so tags take
+        // no room and a multi-line header counts its longest line.
+        headerLen := Markup(FColumns[i].Header).Measure(options, maxWidth).Max;
         if headerLen > autoWidth then autoWidth := headerLen;
       end;
       for r := 0 to High(FRows) do
@@ -826,20 +827,30 @@ var
   procedure PushEdgeRow(leftPart, fillPart, midPart, rightPart : TTableBorderPart);
   var
     col       : Integer;
+    leftCh    : Char;
     fillCh    : Char;
+    midCh     : Char;
+    rightCh   : Char;
     fillLine  : string;
   begin
     if not hasH then Exit;
-    PushBorder(FBorder.GetPart(leftPart, borderUnicode));
-    fillCh := FBorder.GetPart(fillPart, borderUnicode);
+    leftCh  := FBorder.GetPart(leftPart, borderUnicode);
+    fillCh  := FBorder.GetPart(fillPart, borderUnicode);
+    midCh   := FBorder.GetPart(midPart, borderUnicode);
+    rightCh := FBorder.GetPart(rightPart, borderUnicode);
+    // A border with no glyphs for this edge (Simple, Minimal, ... have no
+    // top or bottom) has no line to draw - leave the row out rather than
+    // emitting a line of spaces.
+    if (leftCh = ' ') and (fillCh = ' ') and (midCh = ' ') and (rightCh = ' ') then Exit;
+    PushBorder(leftCh);
     for col := 0 to n - 1 do
     begin
       fillLine := StringOfChar(fillCh, widths[col] + 2);
       PushBorder(fillLine);
       if col < n - 1 then
-        PushBorder(FBorder.GetPart(midPart, borderUnicode));
+        PushBorder(midCh);
     end;
-    PushBorder(FBorder.GetPart(rightPart, borderUnicode));
+    PushBorder(rightCh);
     Push(TAnsiSegment.LineBreak);
   end;
 

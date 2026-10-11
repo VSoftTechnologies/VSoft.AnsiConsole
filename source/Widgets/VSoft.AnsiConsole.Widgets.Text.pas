@@ -2,10 +2,8 @@ unit VSoft.AnsiConsole.Widgets.Text;
 
 {
   TText - the simplest IRenderable: a block of plain (unstyled or uniformly-
-  styled) text. Splits on explicit line breaks and hard-wraps to maxWidth.
-
-  Word-aware wrapping is a future refinement; Phase 1 ships with hard wrap
-  (breaks mid-word when necessary) which is correct but not pretty.
+  styled) text. Splits on explicit line breaks and word-wraps to maxWidth;
+  only a word wider than the whole line is broken mid-word.
 }
 
 interface
@@ -259,7 +257,7 @@ begin
   end;
   SetLength(raw, count);
 
-  // 2. Hard-wrap or crop based on FOverflow.
+  // 2. Word-wrap or crop based on FOverflow.
   if maxWidth <= 0 then
     maxWidth := MaxInt;
   case FOverflow of
@@ -270,7 +268,7 @@ begin
         lines[i] := CropLineToWidth(lines[i], maxWidth, FOverflow = TOverflow.Ellipsis);
     end;
   else
-    lines := SplitLines(raw, maxWidth);  // TOverflow.Fold default
+    lines := WrapLines(raw, maxWidth);  // TOverflow.Fold default
   end;
 
   // 3. Apply alignment by padding each line.

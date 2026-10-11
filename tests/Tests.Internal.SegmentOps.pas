@@ -50,6 +50,15 @@ type
     [Test] procedure SplitLines_ExplicitLineBreak_StartsNewLine;
     [Test] procedure SplitLines_BothExplicitAndWrap_BothHonored;
 
+    [Test] procedure WrapLines_Fits_LeavesSegmentsUntouched;
+    [Test] procedure WrapLines_BreaksAtWhitespace_AndConsumesIt;
+    [Test] procedure WrapLines_WordWiderThanLine_HardWrapsOnOwnLine;
+    [Test] procedure WrapLines_ExplicitBreaksAndBlankLines_Preserved;
+    [Test] procedure WrapLines_WordSpanningSegments_StaysTogether_KeepsStyles;
+    [Test] procedure WrapLines_WhitespaceSegment_IsBreakOpportunity;
+    [Test] procedure WrapLines_WhitespaceRunWiderThanLine_EmitsNoBlankLine;
+    [Test] procedure WrapLines_NoBreakSpace_IsNotBreakOpportunity;
+
     [Test] procedure CropLineToWidth_ZeroMaxWidth_ReturnsEmpty;
     [Test] procedure CropLineToWidth_Fits_ReturnsUnchanged;
     [Test] procedure CropLineToWidth_TooLong_TruncatesNoEllipsis;
@@ -288,6 +297,127 @@ begin
     MakeText('gh')
   ]), 4);
   Assert.AreEqual<Integer>(3, Length(lines));
+end;
+
+{ ---- WrapLines ---- }
+
+function LineText(const line : TAnsiSegments) : string;
+var
+  i : Integer;
+begin
+  result := '';
+  for i := 0 to High(line) do
+    result := result + line[i].Value;
+end;
+
+procedure TSegmentOpsTests.WrapLines_Fits_LeavesSegmentsUntouched;
+var
+  lines : TArray<TAnsiSegments>;
+begin
+  lines := WrapLines(Segs([MakeText('hello '), MakeText('world')]), 80);
+  Assert.AreEqual<Integer>(1, Length(lines));
+  Assert.AreEqual<Integer>(2, Length(lines[0]),
+    'Content that fits must come back as the segments that went in');
+  Assert.AreEqual('hello world', LineText(lines[0]));
+end;
+
+procedure TSegmentOpsTests.WrapLines_BreaksAtWhitespace_AndConsumesIt;
+var
+  lines : TArray<TAnsiSegments>;
+begin
+  // 'one two' is 7 of 9 cells; ' three' would make 13, so the line ends at
+  // that space - which goes with the wrap, not onto either line.
+  lines := WrapLines(Segs([MakeText('one two three four')]), 9);
+  Assert.AreEqual<Integer>(3, Length(lines));
+  Assert.AreEqual('one two', LineText(lines[0]));
+  Assert.AreEqual('three',   LineText(lines[1]));
+  Assert.AreEqual('four',    LineText(lines[2]));
+end;
+
+procedure TSegmentOpsTests.WrapLines_WordWiderThanLine_HardWrapsOnOwnLine;
+var
+  lines : TArray<TAnsiSegments>;
+begin
+  lines := WrapLines(Segs([MakeText('ab cdefghijklmn op')]), 5);
+  Assert.AreEqual<Integer>(4, Length(lines));
+  Assert.AreEqual('ab',    LineText(lines[0]));
+  Assert.AreEqual('cdefg', LineText(lines[1]));
+  Assert.AreEqual('hijkl', LineText(lines[2]));
+  // The tail of the folded word shares its line with what follows.
+  Assert.AreEqual('mn op', LineText(lines[3]));
+end;
+
+procedure TSegmentOpsTests.WrapLines_ExplicitBreaksAndBlankLines_Preserved;
+var
+  lines : TArray<TAnsiSegments>;
+begin
+  lines := WrapLines(Segs([
+    MakeText('aaa bbb'),
+    TAnsiSegment.LineBreak,
+    TAnsiSegment.LineBreak,
+    MakeText('cc')
+  ]), 5);
+  Assert.AreEqual<Integer>(4, Length(lines));
+  Assert.AreEqual('aaa', LineText(lines[0]));
+  Assert.AreEqual('bbb', LineText(lines[1]));
+  Assert.AreEqual('',    LineText(lines[2]), 'Blank line between the two breaks must survive');
+  Assert.AreEqual('cc',  LineText(lines[3]));
+end;
+
+procedure TSegmentOpsTests.WrapLines_WordSpanningSegments_StaysTogether_KeepsStyles;
+var
+  lines : TArray<TAnsiSegments>;
+  red   : TAnsiStyle;
+begin
+  // 'bbb' (red) + 'ccc' (plain) is one word - a style change is not a break
+  // opportunity - and each half keeps its own style on the new line.
+  red := TAnsiStyle.Plain.WithForeground(TAnsiColor.Red);
+  lines := WrapLines(Segs([
+    MakeText('aaa '),
+    MakeStyledText('bbb', red),
+    MakeText('ccc')
+  ]), 8);
+  Assert.AreEqual<Integer>(2, Length(lines));
+  Assert.AreEqual('aaa',    LineText(lines[0]));
+  Assert.AreEqual('bbbccc', LineText(lines[1]));
+  Assert.AreEqual<Integer>(2, Length(lines[1]));
+  Assert.IsTrue(lines[1][0].Style.Foreground.Equals(TAnsiColor.Red));
+  Assert.IsTrue(lines[1][1].Style.IsPlain);
+end;
+
+procedure TSegmentOpsTests.WrapLines_WhitespaceSegment_IsBreakOpportunity;
+var
+  lines : TArray<TAnsiSegments>;
+begin
+  lines := WrapLines(Segs([
+    MakeText('aaaa'),
+    TAnsiSegment.Whitespace('  '),
+    MakeText('bbbb')
+  ]), 6);
+  Assert.AreEqual<Integer>(2, Length(lines));
+  Assert.AreEqual('aaaa', LineText(lines[0]));
+  Assert.AreEqual('bbbb', LineText(lines[1]));
+end;
+
+procedure TSegmentOpsTests.WrapLines_WhitespaceRunWiderThanLine_EmitsNoBlankLine;
+var
+  lines : TArray<TAnsiSegments>;
+begin
+  lines := WrapLines(Segs([MakeText('aa' + StringOfChar(' ', 12) + 'bb')]), 5);
+  Assert.AreEqual<Integer>(2, Length(lines));
+  Assert.AreEqual('aa', LineText(lines[0]));
+  Assert.AreEqual('bb', LineText(lines[1]));
+end;
+
+procedure TSegmentOpsTests.WrapLines_NoBreakSpace_IsNotBreakOpportunity;
+var
+  lines : TArray<TAnsiSegments>;
+begin
+  // U+00A0 glues '10' to 'km': the pair moves to the next line as a unit.
+  lines := WrapLines(Segs([MakeText('about 10' + #$00A0 + 'km')]), 8);
+  Assert.AreEqual<Integer>(2, Length(lines));
+  Assert.AreEqual('about', LineText(lines[0]));
+  Assert.AreEqual('10' + #$00A0 + 'km', LineText(lines[1]));
 end;
 
 { ---- CropLineToWidth ---- }

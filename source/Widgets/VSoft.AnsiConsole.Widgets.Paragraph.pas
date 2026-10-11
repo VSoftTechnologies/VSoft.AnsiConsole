@@ -178,7 +178,7 @@ begin
         lines[i] := CropLineToWidth(lines[i], maxWidth, FOverflow = TOverflow.Ellipsis);
     end;
   else
-    lines := SplitLines(FSegments, maxWidth);
+    lines := WrapLines(FSegments, maxWidth);
   end;
 
   for i := 0 to High(lines) do

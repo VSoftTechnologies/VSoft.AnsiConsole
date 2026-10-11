@@ -91,7 +91,7 @@ type
     FClearOnFinish           : Boolean;
     FRenderedLineCount       : Integer;
     procedure DrawPromptLine(const console : IAnsiConsole);
-    function  PromptWidth : Integer;
+    function  PromptWidth(const console : IAnsiConsole) : Integer;
     function  Displayed(const value : string) : string;
     procedure MoveCaret(const console : IAnsiConsole; const fromCell, toCell : Integer; const fromPending : Boolean = False);
     function  PrevWordStart(const value : string; const caret : Integer) : Integer;
@@ -133,6 +133,7 @@ implementation
 uses
   System.Console.Types,   // TConsoleKey, TConsoleKeyInfo
   VSoft.AnsiConsole.Color,
+  VSoft.AnsiConsole.Internal.SegmentOps,
   VSoft.AnsiConsole.Widgets.Markup;
 
 function TextPrompt : ITextPrompt;
@@ -350,19 +351,32 @@ begin
   EmitPlain(console, FPromptSuffix);
 end;
 
-// Visible width of the prompt prefix (prompt markup + choices + default +
-// suffix). Used to map a caret offset to its wrapped (row, column) position.
-function TTextPrompt.PromptWidth : Integer;
+// Cell offset of the first input cell from the prompt's first cell, counting
+// every row above it as a full console row (prompt markup + choices +
+// default + suffix). Used to map a caret offset to its wrapped (row, column)
+// position.
+function TTextPrompt.PromptWidth(const console : IAnsiConsole) : Integer;
 var
-  promptMarkup : IMarkup;
-  joined       : string;
-  i            : Integer;
+  width   : Integer;
+  options : TRenderOptions;
+  lines   : TArray<TAnsiSegments>;
+  joined  : string;
+  i       : Integer;
 begin
   result := 0;
   if FPrompt <> '' then
   begin
-    promptMarkup := Markup(FPrompt);
-    result := result + promptMarkup.Length;
+    // The prompt markup wraps itself (at word boundaries) to the console
+    // width, so where it ends is a matter of how it rendered, not of how
+    // long it is. Everything after it is inline text the terminal wraps.
+    width := console.Profile.Width;
+    if width < 1 then
+      width := 1;
+    options := TRenderOptions.Create(width, console.Profile.Height,
+                                     console.Profile.Capabilities.ColorSystem);
+    lines := SplitLines(Markup(FPrompt).Render(options, width), MaxInt);
+    if Length(lines) > 0 then
+      result := (Length(lines) - 1) * width + TotalCellCount(lines[High(lines)]);
   end;
   if FShowChoices and (Length(FChoices) > 0) then
   begin
@@ -408,7 +422,7 @@ begin
   width := console.Profile.Width;
   if width < 1 then
     width := 1;
-  prompt := PromptWidth;
+  prompt := PromptWidth(console);
   fromAbs := prompt + fromCell;
   if fromPending and (fromAbs > 0) and (fromAbs mod width = 0) then
     fromRow := fromAbs div width - 1
@@ -583,7 +597,7 @@ begin
           begin
             width := console.Profile.Width;
             // Only when there is a row above (the input has wrapped).
-            if (width > 0) and ((PromptWidth + caret) >= width) then
+            if (width > 0) and ((PromptWidth(console) + caret) >= width) then
             begin
               target := caret - width;
               if target < 0 then
@@ -598,7 +612,7 @@ begin
             width := console.Profile.Width;
             // Only when there is a row below the caret.
             if (width > 0) and
-               (((PromptWidth + caret) div width) < ((PromptWidth + Length(buffer)) div width)) then
+               (((PromptWidth(console) + caret) div width) < ((PromptWidth(console) + Length(buffer)) div width)) then
             begin
               target := caret + width;
               if target > Length(buffer) then

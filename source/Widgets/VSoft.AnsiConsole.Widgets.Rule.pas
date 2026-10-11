@@ -6,8 +6,8 @@ unit VSoft.AnsiConsole.Widgets.Rule;
        ─────── Section ───────
 
   Falls back to ASCII ('-' + ' text ') when the terminal does not support
-  Unicode. The title (if present) is styled and aligned; the border characters
-  take the rule's style.
+  Unicode. The title (if present) is markup, styled and aligned; the border
+  characters take the rule's style, which is also the title's base style.
 }
 
 {$SCOPEDENUMS ON}
@@ -69,7 +69,8 @@ function Rule(const title : string) : IRule; overload;
 implementation
 
 uses
-  VSoft.AnsiConsole.Internal.Cell;
+  VSoft.AnsiConsole.Markup.Parser,
+  VSoft.AnsiConsole.Internal.SegmentOps;
 
 function Rule : IRule;
 begin
@@ -177,10 +178,12 @@ var
   ch         : Char;
   borderStr  : string;
   titleLen   : Integer;
-  titlePart  : string;
+  titleSegs  : TAnsiSegments;
+  titlePart  : TAnsiSegments;
   leftCount  : Integer;
   rightCount : Integer;
   count      : Integer;
+  i          : Integer;
 
   procedure Push(const seg : TAnsiSegment);
   begin
@@ -198,19 +201,38 @@ begin
   SetLength(result, 0);
   count := 0;
 
-  if FTitle = '' then
+  // The title is markup, with the rule's style as its base style.
+  if FTitle <> '' then
+    titleSegs := ParseMarkup(FTitle, FStyle)
+  else
+    SetLength(titleSegs, 0);
+
+  if TotalCellCount(titleSegs) = 0 then
   begin
     Push(TAnsiSegment.Text(StringOfChar(ch, width), FStyle));
     Exit;
   end;
 
   // Surround title with single-space padding; ensure we still have room.
-  titlePart := ' ' + FTitle + ' ';
-  titleLen := CellLength(titlePart);
+  // The title sits on the rule line, so a line break in it becomes a space.
+  SetLength(titlePart, Length(titleSegs) + 2);
+  titlePart[0] := TAnsiSegment.Text(' ', FStyle);
+  for i := 0 to High(titleSegs) do
+  begin
+    if titleSegs[i].IsLineBreak then
+      titlePart[i + 1] := TAnsiSegment.Text(' ', FStyle)
+    else
+      titlePart[i + 1] := titleSegs[i];
+  end;
+  titlePart[High(titlePart)] := TAnsiSegment.Text(' ', FStyle);
+
+  titleLen := TotalCellCount(titlePart);
   if titleLen + 2 > width then
   begin
     // No room for title + any border - just the title, clipped.
-    Push(TAnsiSegment.Text(Copy(titlePart, 1, width), FStyle));
+    titlePart := CropLineToWidth(titlePart, width, False);
+    for i := 0 to High(titlePart) do
+      Push(titlePart[i]);
     Exit;
   end;
 
@@ -236,7 +258,8 @@ begin
     Push(TAnsiSegment.Text(borderStr, FStyle));
   end;
 
-  Push(TAnsiSegment.Text(titlePart, FStyle));
+  for i := 0 to High(titlePart) do
+    Push(titlePart[i]);
 
   if rightCount > 0 then
   begin

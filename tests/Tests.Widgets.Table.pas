@@ -33,6 +33,12 @@ type
     [Test] procedure UpdateCell_ChangesRenderedContent;
     [Test] procedure TitleStyle_AppliesAnsiColorWhenColorsOn;
     [Test] procedure Cell_WithStyle_OverridesPlainContent;
+
+    [Test] procedure Header_WithMarkup_MeasuredWithoutTags;
+    [Test] procedure Header_MultiLine_MeasuredByLongestLine;
+    [Test] procedure Simple_Border_OmitsBlankEdgeLines;
+    [Test] procedure Minimal_Border_OmitsBlankEdgeLines;
+    [Test] procedure Horizontal_Border_KeepsTopAndBottomEdges;
   end;
 
 implementation
@@ -345,6 +351,122 @@ begin
   // Lime in our palette is RGB(0,255,0).
   Assert.IsTrue(Pos('38;2;0;255;0', text) > 0,
                 'Cell style should emit a true-color SGR sequence');
+end;
+
+procedure TTableWidgetTests.Header_WithMarkup_MeasuredWithoutTags;
+var
+  console  : IAnsiConsole;
+  sink     : ICapturedAnsiOutput;
+  t        : ITable;
+  expected : string;
+begin
+  // The header is markup: '[grey]self %[/]' is 6 visible cells, so the auto
+  // column is 6 wide - the 9 characters of tag syntax take no room.
+  console := BuildPlain(80, False, sink);
+  t := Table.WithBorder(TTableBorderKind.Ascii);
+  t.AddColumn('[grey]self %[/]');
+  t.AddRow(['1']);
+  console.Write(t);
+
+  expected :=
+    '+--------+' + sLineBreak +
+    '| self % |' + sLineBreak +
+    '+--------+' + sLineBreak +
+    '| 1      |' + sLineBreak +
+    '+--------+';
+  Assert.AreEqual(expected, sink.Text);
+end;
+
+procedure TTableWidgetTests.Header_MultiLine_MeasuredByLongestLine;
+var
+  console  : IAnsiConsole;
+  sink     : ICapturedAnsiOutput;
+  t        : ITable;
+  expected : string;
+begin
+  // A two-line header is as wide as its longest line (5), not the sum of
+  // both lines (9).
+  console := BuildPlain(80, False, sink);
+  t := Table.WithBorder(TTableBorderKind.Ascii);
+  t.AddColumn('Total'#10'time');
+  t.AddRow(['1']);
+  console.Write(t);
+
+  expected :=
+    '+-------+' + sLineBreak +
+    '| Total |' + sLineBreak +
+    '| time  |' + sLineBreak +
+    '+-------+' + sLineBreak +
+    '| 1     |' + sLineBreak +
+    '+-------+';
+  Assert.AreEqual(expected, sink.Text);
+end;
+
+procedure TTableWidgetTests.Simple_Border_OmitsBlankEdgeLines;
+var
+  console  : IAnsiConsole;
+  sink     : ICapturedAnsiOutput;
+  t        : ITable;
+  expected : string;
+begin
+  // Simple has no top or bottom edge glyphs, so those rows are left out
+  // entirely instead of being drawn as lines of spaces.
+  console := BuildPlain(80, True, sink);
+  t := Table.WithBorder(TTableBorderKind.Simple);
+  t.AddColumn('A', TGridColumnWidth.Fixed, 3, TAlignment.Left);
+  t.AddRow(['1']);
+  console.Write(t);
+
+  expected :=
+    '  A    ' + sLineBreak +
+    StringOfChar(#$2500, 7) + sLineBreak +
+    '  1    ';
+  Assert.AreEqual(expected, sink.Text);
+end;
+
+procedure TTableWidgetTests.Minimal_Border_OmitsBlankEdgeLines;
+var
+  console  : IAnsiConsole;
+  sink     : ICapturedAnsiOutput;
+  t        : ITable;
+  expected : string;
+begin
+  console := BuildPlain(80, True, sink);
+  t := Table.WithBorder(TTableBorderKind.Minimal);
+  t.AddColumn('A', TGridColumnWidth.Fixed, 1, TAlignment.Left);
+  t.AddColumn('B', TGridColumnWidth.Fixed, 1, TAlignment.Left);
+  t.AddRow(['1', '2']);
+  console.Write(t);
+
+  expected :=
+    '  A ' + #$2502 + ' B  ' + sLineBreak +
+    ' ' + StringOfChar(#$2500, 3) + #$253C + StringOfChar(#$2500, 3) + ' ' + sLineBreak +
+    '  1 ' + #$2502 + ' 2  ';
+  Assert.AreEqual(expected, sink.Text);
+end;
+
+procedure TTableWidgetTests.Horizontal_Border_KeepsTopAndBottomEdges;
+var
+  console  : IAnsiConsole;
+  sink     : ICapturedAnsiOutput;
+  t        : ITable;
+  expected : string;
+begin
+  // Horizontal does have top / bottom glyphs - only glyph-less edges are
+  // dropped.
+  console := BuildPlain(80, True, sink);
+  t := Table.WithBorder(TTableBorderKind.Horizontal);
+  t.AddColumn('A', TGridColumnWidth.Fixed, 3, TAlignment.Left);
+  t.AddRow(['1']);
+  console.Write(t);
+
+  expected :=
+    StringOfChar(#$2500, 7) + sLineBreak +
+    '  A    ' + sLineBreak +
+    StringOfChar(#$2500, 7) + sLineBreak +
+    '  1    ' + sLineBreak +
+    StringOfChar(#$2500, 7);
+  Assert.AreEqual(expected, sink.Text);
 end;
 
 initialization

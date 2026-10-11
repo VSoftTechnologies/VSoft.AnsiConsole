@@ -40,6 +40,16 @@ type
     [Test] procedure Rule_StyleAppliesToBorder;
     [Test] procedure Rule_AlignmentLeft_TitleAtStart;
     [Test] procedure Rule_AlignmentRight_TitleAtEnd;
+
+    [Test] procedure Text_Fold_WrapsAtWordBoundary;
+    [Test] procedure Text_Fold_WordLongerThanWidth_HardFolds;
+    [Test] procedure Text_Fold_KeepsLeadingIndent;
+    [Test] procedure Markup_Fold_WrapsAtWordBoundary;
+    [Test] procedure Markup_Fold_WordSpanningStyles_StaysTogether;
+    [Test] procedure Markup_Measure_MultiLine_ReturnsLongestLine;
+    [Test] procedure Rule_Title_ParsesMarkup;
+    [Test] procedure Rule_Title_MarkupStyle_EmitsSGR;
+    [Test] procedure Rule_Title_EscapedBrackets_RenderLiteral;
   end;
 
 implementation
@@ -47,6 +57,8 @@ implementation
 uses
   System.SysUtils,
   VSoft.AnsiConsole.Segment,
+  VSoft.AnsiConsole.Measurement,
+  VSoft.AnsiConsole.Rendering,
   VSoft.AnsiConsole.Markup.Parser,
   Testing.AnsiConsole;
 
@@ -287,6 +299,114 @@ begin
   Assert.IsTrue(posTitle > 15,
     Format('Right alignment should put "hi" near the end (got col %d / 30)',
       [posTitle]));
+end;
+
+procedure TWidgetTests.Text_Fold_WrapsAtWordBoundary;
+var
+  console : IAnsiConsole;
+  sink    : ICapturedAnsiOutput;
+begin
+  // 'hello world foo' in 10 cells: 'world' does not fit after 'hello ', so
+  // the line breaks at the space (which is consumed) rather than mid-word.
+  BuildCapturedConsole(TColorSystem.NoColors, 10, True, console, sink);
+  console.Write(Text('hello world foo'));
+  Assert.AreEqual('hello' + sLineBreak + 'world foo', sink.Text);
+end;
+
+procedure TWidgetTests.Text_Fold_WordLongerThanWidth_HardFolds;
+var
+  console : IAnsiConsole;
+  sink    : ICapturedAnsiOutput;
+begin
+  // A single word wider than the line has no break opportunity, so it still
+  // folds at the cell boundary. The short word before it keeps its own line.
+  BuildCapturedConsole(TColorSystem.NoColors, 5, True, console, sink);
+  console.Write(Text('ab cdefghijklmn'));
+  Assert.AreEqual('ab' + sLineBreak + 'cdefg' + sLineBreak + 'hijkl' + sLineBreak + 'mn',
+    sink.Text);
+end;
+
+procedure TWidgetTests.Text_Fold_KeepsLeadingIndent;
+var
+  console : IAnsiConsole;
+  sink    : ICapturedAnsiOutput;
+begin
+  // Only the whitespace at a wrap point is consumed; indentation at the
+  // start of an explicit line is content and stays.
+  BuildCapturedConsole(TColorSystem.NoColors, 10, True, console, sink);
+  console.Write(Text('  indented text'));
+  Assert.AreEqual('  indented' + sLineBreak + 'text', sink.Text);
+end;
+
+procedure TWidgetTests.Markup_Fold_WrapsAtWordBoundary;
+var
+  console : IAnsiConsole;
+  sink    : ICapturedAnsiOutput;
+begin
+  BuildCapturedConsole(TColorSystem.NoColors, 10, True, console, sink);
+  console.Write(Markup('[red]hello[/] world foo'));
+  Assert.AreEqual('hello' + sLineBreak + 'world foo', sink.Text);
+end;
+
+procedure TWidgetTests.Markup_Fold_WordSpanningStyles_StaysTogether;
+var
+  console : IAnsiConsole;
+  sink    : ICapturedAnsiOutput;
+begin
+  // 'bbbccc' is one word even though a style change splits it into two
+  // segments - a style boundary is not a break opportunity.
+  BuildCapturedConsole(TColorSystem.NoColors, 8, True, console, sink);
+  console.Write(Markup('aaa [bold]bbb[/]ccc'));
+  Assert.AreEqual('aaa' + sLineBreak + 'bbbccc', sink.Text);
+end;
+
+procedure TWidgetTests.Markup_Measure_MultiLine_ReturnsLongestLine;
+var
+  options : TRenderOptions;
+  m       : TMeasurement;
+begin
+  // Lines are 2 / 4 / 3 cells: the natural width is the longest line (4),
+  // not the 9-cell sum.
+  options := TRenderOptions.Create(80, 24, TColorSystem.NoColors);
+  m := Markup('ab'#10'[red]cdef[/]'#10'ghi').Measure(options, 80);
+  Assert.AreEqual(4, m.Max);
+end;
+
+procedure TWidgetTests.Rule_Title_ParsesMarkup;
+var
+  console  : IAnsiConsole;
+  sink     : ICapturedAnsiOutput;
+  captured : string;
+begin
+  BuildCapturedConsole(TColorSystem.NoColors, 20, False, console, sink);
+  console.Write(Rule('[red]abc[/]'));
+  captured := sink.Text;
+  Assert.IsTrue(Pos('[red]', captured) = 0, 'Markup tag must not leak into the rule title');
+  Assert.IsTrue(Pos('[/]', captured) = 0,   'Closing markup tag must not leak into the rule title');
+  // The tags take no cells, so the rule is still exactly 20 wide with the
+  // 3-cell title centred: 7 dashes, ' abc ', 8 dashes.
+  Assert.AreEqual(StringOfChar('-', 7) + ' abc ' + StringOfChar('-', 8), captured);
+end;
+
+procedure TWidgetTests.Rule_Title_MarkupStyle_EmitsSGR;
+var
+  console : IAnsiConsole;
+  sink    : ICapturedAnsiOutput;
+begin
+  BuildCapturedConsole(TColorSystem.TrueColor, 20, True, console, sink);
+  console.Write(Rule('[red]abc[/]'));
+  Assert.IsTrue(Pos('38;2;255;0;0', sink.Text) > 0,
+    'Markup in the rule title should drive the title SGR colour');
+end;
+
+procedure TWidgetTests.Rule_Title_EscapedBrackets_RenderLiteral;
+var
+  console : IAnsiConsole;
+  sink    : ICapturedAnsiOutput;
+begin
+  BuildCapturedConsole(TColorSystem.NoColors, 20, False, console, sink);
+  console.Write(Rule('[[x]]'));
+  Assert.Contains(sink.Text, ' [x] ');
 end;
 
 initialization
