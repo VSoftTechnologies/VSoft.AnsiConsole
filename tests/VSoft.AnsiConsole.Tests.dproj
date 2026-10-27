@@ -12,11 +12,11 @@
         <ProjectName Condition="'$(ProjectName)'==''">VSoft.AnsiConsole.Tests</ProjectName>
     </PropertyGroup>
     <PropertyGroup>
-        <DPMCompiler>XE3</DPMCompiler>
-        <DPMCache Condition="'$(DPMCache)' == ''">$(APPDATA)\.dpm\packages</DPMCache>
-        <DPM>$(DPMCache)\$(DPMCompiler)\$(Platform)</DPM>
-        <DPMSearch Condition="'$(Platform)'=='Win32'">$(DPM)\VSoft.System.Console\1.1.4\lib;$(DPM)\VSoft.DUnitX\0.4.5\src;</DPMSearch>
-        <DPMSearch Condition="'$(Platform)'=='Win64'">$(DPM)\VSoft.System.Console\1.1.4\lib;$(DPM)\VSoft.DUnitX\0.4.5\src;</DPMSearch>
+        <DPMCompiler>delphixe3</DPMCompiler>
+        <DPMCache Condition="'$(DPMCache)' == ''">$(APPDATA)\.dpm\package_cache</DPMCache>
+        <DPM>$(DPMCache)\$(DPMCompiler)</DPM>
+        <DPMSearch Condition="'$(Platform)'=='Win32'">$(DPM)\VSoft.DUnitX\0.5.1\lib\Win32;$(DPM)\VSoft.System.Console\1.4.0\lib\Win32;</DPMSearch>
+        <DPMSearch Condition="'$(Platform)'=='Win64'">$(DPM)\VSoft.DUnitX\0.5.1\lib\Win64;$(DPM)\VSoft.System.Console\1.4.0\lib\Win64;</DPMSearch>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
@@ -254,8 +254,13 @@
                 <PackageReference id="VSoft.DUnitX" version="0.4.5"/>
                 <PackageReference id="VSoft.System.Console" version="1.1.4"/>
             </PackageReferences>
+            <Packages>
+                <PackageReference id="VSoft.DUnitX" version="0.5.1" manifestHash="sha256:9b06af6f8e2f66b5a7084ad65f6fc31361ad2cce4cab40ba5b00bc867e98f69a"/>
+                <PackageReference id="VSoft.System.Console" version="1.4.0" manifestHash="sha256:f8d775e5c3b29e09aefef24435fb2782abe262ad5f6e430a00649126a70908e5"/>
+            </Packages>
         </DPM>
     </ProjectExtensions>
     <Import Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')" Project="$(BDS)\Bin\CodeGear.Delphi.Targets"/>
     <Import Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')" Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj"/>
+    <Import Project="$(DPMCache)\DPM.CopyLocal.targets" Condition="Exists('$(DPMCache)\DPM.CopyLocal.targets')"/>
 </Project>
